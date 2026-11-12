@@ -16,6 +16,7 @@ app = FastAPI()
 @app.get("/health")
 def health():
     return {"status": "ok"}
+print("=== Webhook received! ===", await request.json())
 
 @app.post("/webhook/company-created")
 async def company_created(request: Request):
