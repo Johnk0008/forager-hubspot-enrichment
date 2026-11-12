@@ -6,9 +6,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 
-# स्क्रिप्ट के स्थान के सापेक्ष .env का पथ स्पष्ट रूप से निर्दिष्ट करें
+# Explicitly specify the .env path relative to the script's location
 env_path = Path(__file__).resolve().parent / ".env"
-print("Loading .env from:", env_path)  # डिबग के लिए, पुष्टि करें कि पथ सही है
+print("Loading .env from:", env_path)  # For debugging, verify the path is correct
 load_dotenv(dotenv_path=env_path, override=True)
 
 FORAGER_KEY = os.getenv("FORAGER_API_KEY")
@@ -19,7 +19,7 @@ HUBSPOT_TOKEN = os.getenv("HUBSPOT_TOKEN")
 FORAGER_BASE = f"https://api-v2.forager.ai/api/{FORAGER_ACCOUNT}/datastorage"
 HUBSPOT_BASE = "https://api.hubapi.com"
 
-# --- 1. Forager से OpenAI कंपनी का पूरा डेटा प्राप्त करें ---
+# --- 1. Fetch complete OpenAI company data from Forager ---
 def get_openai_company():
     resp = requests.post(
         f"{FORAGER_BASE}/organization_search/",
@@ -31,7 +31,7 @@ def get_openai_company():
     resp.raise_for_status()
     return resp.json()["search_results"][0]
 
-# --- 2. HubSpot में कंपनी बनाएं/अपडेट करें ---
+# --- 2. Create/Update company in HubSpot ---
 def upsert_hubspot_company(company):
     props = {
         "name": company["name"],
@@ -44,7 +44,7 @@ def upsert_hubspot_company(company):
         "state": (company.get("addresses") or [{}])[0].get("state", "") if company.get("addresses") else "",
         "country": (company.get("addresses") or [{}])[0].get("country", "") if company.get("addresses") else "",
     }
-    # पहले domain से खोजें
+    # First search by domain
     search = requests.post(
         f"{HUBSPOT_BASE}/crm/v3/objects/companies/search",
         headers={"Authorization": f"Bearer {HUBSPOT_TOKEN}", "Content-Type": "application/json"},
@@ -69,7 +69,7 @@ def upsert_hubspot_company(company):
     resp.raise_for_status()
     return resp.json()["id"]
 
-# --- 3. HubSpot में contact बनाएं/अपडेट करें ---
+# --- 3. Create/Update contact in HubSpot ---
 def upsert_hubspot_contact(person):
     props = {
         "firstname": person["first_name"],
@@ -81,14 +81,14 @@ def upsert_hubspot_contact(person):
         "state": "",
         "country": "",
     }
-    # location से city/state/country निकालें
+    # Extract city/state/country from location
     if person.get("location"):
         parts = [p.strip() for p in person["location"]["name"].split(",")]
         if len(parts) >= 1: props["city"] = parts[0]
         if len(parts) >= 2: props["state"] = parts[1]
         if len(parts) >= 3: props["country"] = parts[2]
 
-    # email से खोजें
+    # Search by email
     search = requests.post(
         f"{HUBSPOT_BASE}/crm/v3/objects/contacts/search",
         headers={"Authorization": f"Bearer {HUBSPOT_TOKEN}", "Content-Type": "application/json"},
@@ -112,36 +112,36 @@ def upsert_hubspot_contact(person):
        print("HubSpot error:", resp.text)
     return resp.json()["id"]
 
-# --- 4. Contact और Company को जोड़ें ---
+# --- 4. Associate Contact and Company ---
 def associate(contact_id, company_id):
     requests.put(
         f"{HUBSPOT_BASE}/crm/v3/objects/contacts/{contact_id}/associations/companies/{company_id}/contact_to_company",
         headers={"Authorization": f"Bearer {HUBSPOT_TOKEN}", "Content-Type": "application/json"},
     )
 
-# --- मुख्य प्रक्रिया ---
+# --- Main Process ---
 if __name__ == "__main__":
-    print("Forager से OpenAI कंपनी का डेटा प्राप्त कर रहे हैं...")
+    print("Fetching OpenAI company data from Forager...")
     company = get_openai_company()
-    print(f"कंपनी प्राप्त हुई: {company['name']}, revenue={company.get('finance_info')}")
+    print(f"Company retrieved: {company['name']}, revenue={company.get('finance_info')}")
 
-    print("HubSpot में कंपनी लिख रहे हैं...")
+    print("Writing company to HubSpot...")
     company_id = upsert_hubspot_company(company)
-    print(f"कंपनी ID: {company_id}")
+    print(f"Company ID: {company_id}")
 
-    # 5 लोगों का डेटा (आपके Forager परिणामों से)
+    # Data for 5 people (from your Forager results)
     people = [
         {"first_name": "Kristen", "last_name": "Pawloski", "email": "kristenpaw24@gmail.com", "phone": "+16507935261", "role_title": "Technical Recruiter", "headline": "Technical Recruiter @ OpenAI", "linkedin_info": {"public_profile_url": "https://www.linkedin.com/in/kjpawloski/"}, "location": {"name": "san francisco, california, united states"}},
         {"first_name": "Holly", "last_name": "Blake", "email": "hols.blake@gmail.com", "phone": "+353838251600", "role_title": "Founding Recruiter | EMEA", "headline": "Talent | OpenAI | Love to build", "linkedin_info": {"public_profile_url": "https://www.linkedin.com/in/holly-blake-64409a49/"}, "location": {"name": "san francisco bay, united states"}},
         {"first_name": "Stella", "last_name": "L.", "email": "sweetstella84@hotmail.com", "phone": "+12013540803", "role_title": "Senior Technical Recruiter", "headline": "Technical IT Recruiter", "linkedin_info": {"public_profile_url": "https://www.linkedin.com/in/ella-recruiter/"}, "location": {"name": "bergenfield, new jersey, united states"}},
         {"first_name": "Phuong", "last_name": "Vu", "email": "phuong.voo@gmail.com", "phone": "+14089311400", "role_title": "Recruiter", "headline": "Recruiting", "linkedin_info": {"public_profile_url": "https://www.linkedin.com/in/phuongvu/"}, "location": {"name": "united states"}},
-        {"first_name": "Keegan", "last_name": "Y.", "email": "entirix@gmail.com", "phone": "", "role_title": "Founding Recruiter (पूर्व OpenAI)", "headline": "Founding Recruiter at Gumloop | पूर्व OpenAI", "linkedin_info": {"public_profile_url": "https://www.linkedin.com/in/dkyv/"}, "location": {"name": "san francisco, california, united states"}},
+        {"first_name": "Keegan", "last_name": "Y.", "email": "entirix@gmail.com", "phone": "", "role_title": "Founding Recruiter (Former OpenAI)", "headline": "Founding Recruiter at Gumloop | Former OpenAI", "linkedin_info": {"public_profile_url": "https://www.linkedin.com/in/dkyv/"}, "location": {"name": "san francisco, california, united states"}},
     ]
 
     for p in people:
-        print(f"HubSpot में contact लिख रहे हैं: {p['first_name']} {p['last_name']}")
+        print(f"Writing contact to HubSpot: {p['first_name']} {p['last_name']}")
         cid = upsert_hubspot_contact(p)
         associate(cid, company_id)
-        print(f"  ✅ Contact ID: {cid}, कंपनी से जोड़ा गया")
+        print(f"  ✅ Contact ID: {cid}, associated with company")
 
-    print("\n🎉 पूरा हो गया! HubSpot में OpenAI कंपनी + 5 contacts देखें।")
+    print("\n🎉 Done! Check HubSpot for the OpenAI company + 5 contacts.")

@@ -29,7 +29,7 @@ async def company_created(request: Request):
         if not company_id:
             continue
         
-        # HubSpot से कंपनी का डोमेन प्राप्त करें
+        # Fetch the company domain from HubSpot
         r = requests.get(
             f"{HUBSPOT_BASE}/crm/v3/objects/companies/{company_id}",
             headers={"Authorization": f"Bearer {HUBSPOT_TOKEN}"},
@@ -44,7 +44,7 @@ async def company_created(request: Request):
         if not domain:
             continue
             
-        # Forager से कंपनी एनरिच करें
+        # Enrich the company using Forager
         fr = requests.post(
             f"{FORAGER_BASE}/organization_search/",
             headers={"X-API-KEY": FORAGER_KEY, "Content-Type": "application/json"},
