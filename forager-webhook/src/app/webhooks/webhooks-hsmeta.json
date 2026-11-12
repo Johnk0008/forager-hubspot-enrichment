@@ -1,0 +1,19 @@
+{
+  "uid": "company-webhook",
+  "type": "webhooks",
+  "config": {
+    "settings": {
+      "targetUrl": "https://forager-hubspot-enrichment-production-a43fb217.up.railway.app/webhook/company-created",
+      "maxConcurrentRequests": 10
+    },
+    "subscriptions": {
+      "crmObjects": [
+        {
+          "subscriptionType": "object.creation",
+          "objectType": "company",
+          "active": true
+        }
+      ]
+    }
+  }
+}
