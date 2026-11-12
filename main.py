@@ -2,8 +2,9 @@ import os
 import requests
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 FORAGER_KEY = os.getenv("FORAGER_API_KEY")
 FORAGER_ACCOUNT = os.getenv("FORAGER_ACCOUNT_ID")
@@ -20,27 +21,30 @@ def health():
 @app.post("/webhook/company-created")
 async def company_created(request: Request):
     payload = await request.json()
-    print("=== Webhook received! ===", payload) 
-
-    # HubSpot webhook payload में objectId होता है
+    print("=== Webhook received! ===", payload)
+    
     events = payload if isinstance(payload, list) else [payload]
     for ev in events:
         company_id = ev.get("objectId")
         if not company_id:
             continue
-        # HubSpot से कंपनी का domain प्राप्त करें
+        
+        # HubSpot से कंपनी का डोमेन प्राप्त करें
         r = requests.get(
             f"{HUBSPOT_BASE}/crm/v3/objects/companies/{company_id}",
             headers={"Authorization": f"Bearer {HUBSPOT_TOKEN}"},
             params={"properties": "domain,name"},
         )
         if r.status_code != 200:
+            print("HubSpot company fetch failed:", r.text)
             continue
+            
         company = r.json().get("properties", {})
         domain = company.get("domain")
         if not domain:
             continue
-        # Forager से कंपनी को एनरिच करें
+            
+        # Forager से कंपनी एनरिच करें
         fr = requests.post(
             f"{FORAGER_BASE}/organization_search/",
             headers={"X-API-KEY": FORAGER_KEY, "Content-Type": "application/json"},
@@ -58,34 +62,4 @@ async def company_created(request: Request):
                 headers={"Authorization": f"Bearer {HUBSPOT_TOKEN}", "Content-Type": "application/json"},
                 json={"properties": props},
             )
-    return {"ok": True}
-
-@app.post("/webhook/contact-created")
-async def contact_created(request: Request):
-    payload = await request.json()
-    events = payload if isinstance(payload, list) else [payload]
-    for ev in events:
-        contact_id = ev.get("objectId")
-        if not contact_id:
-            continue
-        r = requests.get(
-            f"{HUBSPOT_BASE}/crm/v3/objects/contacts/{contact_id}",
-            headers={"Authorization": f"Bearer {HUBSPOT_TOKEN}"},
-            params={"properties": "email,firstname,lastname"},
-        )
-        if r.status_code != 200:
-            continue
-        contact = r.json().get("properties", {})
-        email = contact.get("email")
-        if not email:
-            continue
-        # Forager में व्यक्तिगत ईमेल से खोजें
-        fr = requests.post(
-            f"{FORAGER_BASE}/person_contacts_lookup/personal_emails/",
-            headers={"X-API-KEY": FORAGER_KEY, "Content-Type": "application/json"},
-            json={"email": email},
-        )
-        # नोट: Forager का person lookup अधिकांशतः linkedin_public_identifier या person_id से होता है,
-        # सीधे email से खोजने के लिए आपको पहले person खोजना होगा, फिर lookup करना होगा।
-        # यहाँ सरल रूप में केवल webhook प्राप्ति और लॉग दिखाया गया है।
     return {"ok": True}
