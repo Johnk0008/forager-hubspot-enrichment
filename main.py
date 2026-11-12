@@ -16,11 +16,12 @@ app = FastAPI()
 @app.get("/health")
 def health():
     return {"status": "ok"}
-print("=== Webhook received! ===", await request.json())
 
 @app.post("/webhook/company-created")
 async def company_created(request: Request):
     payload = await request.json()
+    print("=== Webhook received! ===", payload) 
+
     # HubSpot webhook payload में objectId होता है
     events = payload if isinstance(payload, list) else [payload]
     for ev in events:
